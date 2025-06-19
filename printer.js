@@ -1,36 +1,15 @@
 const escpos = require("escpos");
 escpos.Network = require("escpos-network");
-escpos.USB = require("escpos-usb");
 
 function getDevice() {
   try {
-    if (process.env.USE_NETWORK === "true") {
-      return new escpos.Network(process.env.PRINTER_IP);
-    } else {
-      const vendorId = parseInt(process.env.USB_VENDOR_ID);
-      const productId = parseInt(process.env.USB_PRODUCT_ID);
-
-      const devices = escpos.USB.findPrinter();
-
-      const matchingDevice = devices.find(dev => {
-        return (
-          dev.deviceDescriptor.idVendor === vendorId &&
-          dev.deviceDescriptor.idProduct === productId
-        );
-      });
-
-      if (matchingDevice) {
-        return new escpos.USB(matchingDevice);
-      } else {
-        console.error("❌ Aucune imprimante USB correspondante trouvée");
-        return null;
-      }
-    }
+    return new escpos.Network(process.env.PRINTER_IP);
   } catch (err) {
-    console.error("❌ Erreur lors de la détection de l'imprimante USB :", err);
+    console.error("❌ Erreur réseau :", err);
     return null;
   }
 }
+
 
 
 function printTest(callback) {

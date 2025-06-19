@@ -4,7 +4,7 @@ const cors = require("cors");
 const bodyParser = require("body-parser");
 const os = require("os");
 const escpos = require("escpos");
-escpos.USB = require("escpos-usb");
+escpos.Network = require("escpos-network");
 
 
 const { printTest, getStatus, printTicket } = require("./printer");
@@ -124,40 +124,6 @@ app.get("/health", (req, res) => {
       printerIP: process.env.PRINTER_IP || "Non configuré"
     }
   });
-});
-
-app.get("/findusbprinter", (req, res) => {
-  try {
-    const devices = escpos.USB.findPrinter();
-
-    if (!devices.length) {
-      return res.status(404).json({ message: "Aucune imprimante USB détectée" });
-    }
-
-    const formattedDevices = devices.map((device, i) => {
-      try {
-        // Extraire les informations depuis le deviceDescriptor
-        const descriptor = device.deviceDescriptor || {};
-        return {
-          index: i,
-          vendorId: descriptor.idVendor,
-          productId: descriptor.idProduct,
-          manufacturer: device.deviceDescriptor?.iManufacturer,
-          product: device.deviceDescriptor?.iProduct
-        };
-      } catch (err) {
-        return { index: i, info: "Impossible de lire les détails du périphérique" };
-      }
-    });
-
-    res.json({
-      success: true,
-      count: devices.length,
-      printers: formattedDevices
-    });
-  } catch (err) {
-    res.status(500).json({ error: "Erreur lors de la détection USB", details: err.message });
-  }
 });
 
 

@@ -1,9 +1,9 @@
 {
   "name": "serveur-impression",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",
@@ -15,7 +15,6 @@
     "dotenv": "^16.5.0",
     "escpos": "^3.0.0-alpha.6",
     "escpos-network": "^3.0.0-alpha.5",
-    "escpos-usb": "^3.0.0-alpha.4",
     "express": "^5.1.0"
   }
 }
