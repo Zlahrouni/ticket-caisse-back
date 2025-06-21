@@ -34,10 +34,12 @@ app.use((req, res, next) => {
 });
 
 // 🧪 Route impression test SIMPLIFIÉE
-app.get("/print-test", (req, res) => {
-  console.log("🧪 Demande d'impression test reçue");
+const ip = req.query.ip;
+  if (!ip) {
+    return res.status(400).json({ error: "IP de l'imprimante manquante (paramètre ?ip=...)" });
+  }
   
-  printTest((err) => {
+  printTest(ip, (err) => {
     if (err) {
       console.error("❌ Erreur impression test:", err.message);
       return res.status(500).json({ 
@@ -58,19 +60,19 @@ app.get("/print-test", (req, res) => {
 
 // 🧾 Impression ticket SIMPLIFIÉE
 app.post("/print-ticket", (req, res) => {
-  console.log("🎫 Demande d'impression ticket reçue:", req.body);
-  
+  const ip = req.body.ip;
   const data = req.body;
+
+  if (!ip) {
+    return res.status(400).json({ error: "IP de l'imprimante manquante (champ 'ip')" });
+  }
   
   // Validation basique
   if (!data.produits || !Array.isArray(data.produits)) {
-    return res.status(400).json({ 
-      error: "Produits manquants ou invalides",
-      received: data
-    });
+    return res.status(400).json({ error: "Produits manquants ou invalides", received: data });
   }
 
-  printTicket(data, (err) => {
+  printTicket(ip, data, (err) => {
     if (err) {
       console.error("❌ Erreur impression ticket:", err.message);
       return res.status(500).json({ 

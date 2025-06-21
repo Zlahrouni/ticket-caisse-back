@@ -1,9 +1,9 @@
 const escpos = require("escpos");
 escpos.Network = require("escpos-network");
 
-function getDevice() {
+function getDevice(ip) {
   try {
-    return new escpos.Network(process.env.PRINTER_IP);
+    return new escpos.Network(ip);
   } catch (err) {
     console.error("❌ Erreur réseau :", err);
     return null;
@@ -11,13 +11,12 @@ function getDevice() {
 }
 
 
-
-function printTest(callback) {
-  const device = getDevice();
+function printTest(ip, callback) {
+  const device = getDevice(ip);
   if (!device) return callback(new Error("Aucune imprimante détectée"));
 
   const printer = new escpos.Printer(device);
-  device.open(function (error) {
+  device.open((error) => {
     if (error) return callback(error);
 
     printer
@@ -35,6 +34,7 @@ function printTest(callback) {
     callback(null);
   });
 }
+
 
 function getStatus(callback) {
   const isNetwork = process.env.USE_NETWORK === "true";
@@ -105,8 +105,8 @@ function wrapText(text, maxWidth = 32) {
 }
 
 // Fonction d'impression ultra-compacte pour cuisine
-function printTicket(data, callback) {
-  const device = getDevice();
+function printTicket(ip, data, callback) {
+  const device = getDevice(ip);
   if (!device) return callback(new Error("Aucune imprimante détectée"));
 
   const printer = new escpos.Printer(device);
