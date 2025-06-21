@@ -3,18 +3,10 @@ const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const escpos = require("escpos");
-const https = require("https");
+
 escpos.Network = require("escpos-network");
 
-const fs = require("fs");
-
-
 const { printTest, printTicket } = require("./printer");
-
-const options = {
-  key: fs.readFileSync("key.pem"),
-  cert: fs.readFileSync("cert.pem")
-};
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -71,10 +63,6 @@ app.post("/print-ticket", (req, res) => {
     }
     res.json({ success: true, message: "Ticket imprimé avec succès" });
   });
-});
-
-https.createServer(options, app).listen(PORT, () => {
-  console.log(`🖨️ HTTPS actif sur https://0.0.0.0:${PORT}`);
 });
 
 // 🩺 Health check
