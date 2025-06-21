@@ -34,7 +34,9 @@ app.use((req, res, next) => {
 });
 
 // 🧪 Route impression test SIMPLIFIÉE
-const ip = req.query.ip;
+app.get("/print-test", (req, res) => {
+  const ip = req.query.ip;
+
   if (!ip) {
     return res.status(400).json({ error: "IP de l'imprimante manquante (paramètre ?ip=...)" });
   }
@@ -66,8 +68,7 @@ app.post("/print-ticket", (req, res) => {
   if (!ip) {
     return res.status(400).json({ error: "IP de l'imprimante manquante (champ 'ip')" });
   }
-  
-  // Validation basique
+
   if (!data.produits || !Array.isArray(data.produits)) {
     return res.status(400).json({ error: "Produits manquants ou invalides", received: data });
   }
