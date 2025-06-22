@@ -12,7 +12,11 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const API_KEY = process.env.PRINT_API_KEY;
 
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(bodyParser.json());
 
 // 🔓 Authentification optionnelle
