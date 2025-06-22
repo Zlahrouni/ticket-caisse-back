@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  print-service:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DEBUG=true
+      - SKIP_AUTH=true
+      - USE_NETWORK=true
+    container_name: print-service
+    restart: unless-stopped

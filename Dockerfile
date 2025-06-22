@@ -1,22 +1,19 @@
-FROM node:18-slim
+FROM node:18-alpine
 
-# Installer les dépendances nécessaires à node-usb
-RUN apt-get update && apt-get install -y \
-    python3 \
-    make \
-    g++ \
-    libusb-1.0-0-dev \
-    libudev-dev \
-    && rm -rf /var/lib/apt/lists/*
-
+# Créer le répertoire de l'app
 WORKDIR /app
 
+# Copier les fichiers de dépendances
 COPY package*.json ./
 
+# Installer les dépendances
 RUN npm install
 
+# Copier le code source
 COPY . .
 
+# Exposer le port du serveur
 EXPOSE 3001
 
+# Lancer l'application
 CMD ["node", "server.js"]

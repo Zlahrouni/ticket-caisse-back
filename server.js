@@ -6,7 +6,7 @@ const escpos = require("escpos");
 
 escpos.Network = require("escpos-network");
 
-const { printTest, printTicket } = require("./printer");
+const {  printTicket } = require("./printer");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -37,13 +37,23 @@ app.get("/print-test", (req, res) => {
     return res.status(400).json({ error: "IP de l'imprimante manquante (paramètre ?ip=...)" });
   }
 
-  printTest(ip, (err) => {
+  const fakeData = {
+    table: "TEST",
+    commandeId: "TEST-001",
+    timestamp: new Date().toISOString(),
+    produits: [
+      { quantite: 1, nom: "Connexion réussie 🎉", specialInstructions: "" }
+    ]
+  };
+
+  printTicket(ip, fakeData, (err) => {
     if (err) {
       return res.status(500).json({ error: "Erreur impression test", details: err.message });
     }
     res.json({ success: true, message: "Impression test réussie" });
   });
 });
+
 
 // 🧾 Impression ticket
 app.post("/print-ticket", (req, res) => {

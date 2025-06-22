@@ -10,32 +10,6 @@ function getDevice(ip) {
   }
 }
 
-
-function printTest(ip, callback) {
-  const device = getDevice(ip);
-  if (!device) return callback(new Error("Aucune imprimante détectée"));
-
-  const printer = new escpos.Printer(device);
-  device.open((error) => {
-    if (error) return callback(error);
-
-    printer
-      .align("ct")
-      .style("b")
-      .size(2, 2)
-      .text("TICKET DE TEST")
-      .size(1, 1)
-      .text(new Date().toLocaleString("fr-FR"))
-      .text("------------------------")
-      .text("Connexion réussie 🎉")
-      .cut()
-      .close();
-
-    callback(null);
-  });
-}
-
-
 function getStatus(callback) {
   const isNetwork = process.env.USE_NETWORK === "true";
   try {
@@ -168,6 +142,5 @@ function printTicket(ip, data, callback) {
 
 module.exports = {
   printTicket,
-  printTest,
   getStatus
 };
