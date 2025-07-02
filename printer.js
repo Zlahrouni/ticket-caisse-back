@@ -78,7 +78,86 @@ function wrapText(text, maxWidth = 32) {
   return lines;
 }
 
-// Fonction d'impression ultra-compacte pour cuisine
+// ✅ Fonction pour formater l'affichage des portions
+function formatPortionInfo(item) {
+  if (!item.portionInfo) return '';
+  
+  // Mapping des portions pour un affichage plus clair
+  const portionMap = {
+    ' 🔸': ' (piece)',
+    ' 🔸 demi': ' (1/2)',
+    'demi part': ' (1/2)',
+    'à la pièce': ' (piece)',
+    'demi': ' (1/2)',
+    'pièce': ' (piece)'
+  };
+  
+  let portionText = item.portionInfo;
+  for (const [key, value] of Object.entries(portionMap)) {
+    portionText = portionText.replace(key, value);
+  }
+  
+  return portionText;
+}
+
+// ✅ Fonction pour imprimer les détails des menus composés
+function printComposedMenuDetails(printer, item) {
+  if (!item.isComposed || !item.composedDetails) return;
+  
+  // Titre pour les personnalisations
+  printer
+    .style("normal")
+    .size(1, 0)
+    .text("  > Personnalise :");
+  
+  // Afficher chaque étape de personnalisation
+  item.composedDetails.forEach((detail, index) => {
+    // Nom de l'étape (ex: "Viande", "Sauce")
+    printer
+      .style("b")
+      .size(1, 0)
+      .text(`    ${removeAccents(detail.stepLabel)} :`);
+    
+    // Articles sélectionnés pour cette étape
+    detail.items.forEach((selectedItem) => {
+      let itemText = `      * ${removeAccents(selectedItem.nom)}`;
+      
+      // Ajuster la taille d'affichage pour cette ligne
+      const itemLines = wrapText(itemText, 30);
+      
+      printer
+        .style("normal")
+        .size(1, 0);
+      
+      itemLines.forEach(line => {
+        printer.text(line);
+      });
+      
+      // Note personnalisée pour cet item
+      if (selectedItem.note && selectedItem.note.trim()) {
+        const noteText = `        NOTE: ${removeAccents(selectedItem.note)}`;
+        const noteLines = wrapText(noteText, 28);
+        
+        printer.size(0, 0); // Très petit pour les notes
+        noteLines.forEach(noteLine => {
+          printer.text(noteLine);
+        });
+      }
+    });
+    
+    // Espace entre les étapes
+    if (index < item.composedDetails.length - 1) {
+      printer.text("");
+    }
+  });
+  
+  // Ligne de séparation après les détails composés
+  printer
+    .size(1, 1)
+    .text("  ........................");
+}
+
+// ✅ Fonction d'impression de ticket normal
 function printTicket(ip, data, callback) {
   const device = getDevice(ip);
   if (!device) return callback(new Error("Aucune imprimante détectée"));
@@ -87,49 +166,100 @@ function printTicket(ip, data, callback) {
   device.open(function (error) {
     if (error) return callback(error);
 
-    // Header minimal
+    // ✅ Header normal avec détection du type
+    const isTableOrder = data.table && data.table !== 'EMPORTER';
+    const orderType = isTableOrder ? 'TABLE' : 'EMPORTER';
+    const orderNumber = isTableOrder ? data.table : (data.clientNumber || data.numeroClient || '?');
+
     printer
       .align("ct")
       .style("b")
       .size(2, 1)
-      .text(`TABLE ${removeAccents(data.table || "?")}`)
+      .text(`${orderType} ${removeAccents(orderNumber.toString())}`)
       .size(1, 1)
-      .style("normal")
-      .text(`${removeAccents(data.commandeId || "-")} | ${removeAccents(data.timestamp || new Date().toLocaleTimeString("fr-FR", { hour: '2-digit', minute: '2-digit' }))}`)
-      .text("------------------------")
+      .style("normal");
+
+    // ✅ Informations de commande
+    const timestamp = data.timestamp || new Date().toLocaleTimeString("fr-FR", { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    
+    printer
+      .text(`${removeAccents(data.commandeId || "-")} | ${timestamp}`)
+      .text("========================")
       .align("lt");
 
-    // Produits compacts
-    data.produits.forEach((item) => {
-      // Nom du produit avec quantité
-      const productLine = `${item.quantite}x ${removeAccents(item.nom)}`;
+    // ✅ Note globale de la commande si présente
+    if (data.noteCommande && data.noteCommande.trim()) {
+      printer
+        .style("b")
+        .text("NOTE GLOBALE:")
+        .style("normal")
+        .text(`> ${removeAccents(data.noteCommande)}`)
+        .text("------------------------");
+    }
+
+    // ✅ Traitement des produits avec support complet du nouveau workflow
+    data.produits.forEach((item, itemIndex) => {
+      // ✅ Nom du produit avec quantité et portion
+      let productName = removeAccents(item.nom);
+      const portionInfo = formatPortionInfo(item);
+      if (portionInfo) {
+        productName += ` (${portionInfo})`;
+      }
+      
+      const productLine = `${item.quantite}x ${productName}`;
       const productLines = wrapText(productLine, 32);
       
+      // Nom du produit en gras
       printer.style("b");
       productLines.forEach(line => {
         printer.text(line);
       });
       
-      // Instructions spéciales en plus petit
-      if (item.specialInstructions) {
-        const instruction = `Com : ${removeAccents(item.specialInstructions)}`;
-        const instructionLines = wrapText(instruction, 32); // Ajusté pour la nouvelle taille
+      // ✅ Gestion des menus composés (nouveau)
+      if (item.isComposed) {
+        printComposedMenuDetails(printer, item);
+      }
+      
+      // ✅ Instructions spéciales classiques (améliorées)
+      if (item.specialInstructions && item.specialInstructions.trim()) {
+        const instruction = `Instruction: ${removeAccents(item.specialInstructions)}`;
+        const instructionLines = wrapText(instruction, 30);
         
         printer
           .style("normal")
-          .size(1, 0); // Un peu plus grand que très petit
+          .size(1, 0);
         
         instructionLines.forEach(line => {
           printer.text(`  ${line}`);
         });
         
-        printer.size(1, 1); // Retour à la taille normale
+        printer.size(1, 1);
+      }
+      
+      // ✅ Espacement entre les produits
+      if (itemIndex < data.produits.length - 1) {
+        printer.text("------------------------");
       }
     });
 
-    // Footer minimal
+    // ✅ Footer normal - garde seulement l'essentiel
     printer
-      .text("------------------------")
+      .text("========================")
+      .align("ct")
+      .style("normal")
+      .size(1, 1);
+    
+    // Afficher seulement le numéro client pour les commandes à emporter
+    if (!isTableOrder && (data.clientNumber || data.numeroClient)) {
+      printer.text(`Client N°${data.clientNumber || data.numeroClient}`);
+    }
+    
+    printer
+      .text("FIN TICKET")
       .cut();
 
     setTimeout(() => {
@@ -139,8 +269,149 @@ function printTicket(ip, data, callback) {
   });
 }
 
+// ✅ Fonction d'impression de ticket d'annulation - NOUVELLE
+function printCancelTicket(ip, data, callback) {
+  const device = getDevice(ip);
+  if (!device) return callback(new Error("Aucune imprimante détectée"));
+
+  const printer = new escpos.Printer(device);
+  device.open(function (error) {
+    if (error) return callback(error);
+
+    // ✅ Header avec ANNULE en gros et visible
+    const isTableOrder = data.table && data.table !== 'EMPORTER';
+    const orderType = isTableOrder ? 'TABLE' : 'EMPORTER';
+    const orderNumber = isTableOrder ? data.table : (data.clientNumber || data.numeroClient || '?');
+
+    printer
+      .align("ct")
+      .style("b")
+      .size(2, 2)
+      .text("ANNULE")
+      .size(2, 1)
+      .text(`${orderType} ${removeAccents(orderNumber.toString())}`)
+      .size(1, 1)
+      .style("normal");
+
+    // ✅ Informations de commande avec mention d'annulation
+    const timestamp = data.timestamp || new Date().toLocaleTimeString("fr-FR", { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    
+    printer
+      .text(`${removeAccents(data.commandeId || "-")} | ${timestamp}`)
+      .style("b")
+      .text("COMMANDE ANNULEE")
+      .style("normal")
+      .text("========================")
+      .align("lt");
+
+    // ✅ Raison d'annulation si fournie
+    if (data.cancellationReason && data.cancellationReason.trim()) {
+      printer
+        .style("b")
+        .text("RAISON:")
+        .style("normal");
+      
+      const reasonLines = wrapText(`> ${removeAccents(data.cancellationReason)}`, 30);
+      reasonLines.forEach(line => {
+        printer.text(line);
+      });
+      
+      printer.text("------------------------");
+    }
+
+    // ✅ Note globale si présente
+    if (data.noteCommande && data.noteCommande.trim()) {
+      printer
+        .style("b")
+        .text("NOTE GLOBALE:")
+        .style("normal");
+      
+      const noteLines = wrapText(`> ${removeAccents(data.noteCommande)}`, 30);
+      noteLines.forEach(line => {
+        printer.text(line);
+      });
+      
+      printer.text("------------------------");
+    }
+
+    // ✅ Traitement des produits (même logique que printTicket normal)
+    data.produits.forEach((item, itemIndex) => {
+      // Nom du produit avec quantité et portion
+      let productName = removeAccents(item.nom);
+      const portionInfo = formatPortionInfo(item);
+      if (portionInfo) {
+        productName += ` (${portionInfo})`;
+      }
+      
+      const productLine = `${item.quantite}x ${productName}`;
+      const productLines = wrapText(productLine, 32);
+      
+      // Nom du produit en gras
+      printer.style("b");
+      productLines.forEach(line => {
+        printer.text(line);
+      });
+      
+      // Gestion des menus composés
+      if (item.isComposed) {
+        printComposedMenuDetails(printer, item);
+      }
+      
+      // Instructions spéciales classiques
+      if (item.specialInstructions && item.specialInstructions.trim()) {
+        const instruction = `Instruction: ${removeAccents(item.specialInstructions)}`;
+        const instructionLines = wrapText(instruction, 30);
+        
+        printer
+          .style("normal")
+          .size(1, 0);
+        
+        instructionLines.forEach(line => {
+          printer.text(`  ${line}`);
+        });
+        
+        printer.size(1, 1);
+      }
+      
+      // Espacement entre les produits
+      if (itemIndex < data.produits.length - 1) {
+        printer.text("------------------------");
+      }
+    });
+
+    // ✅ Footer avec mention d'annulation claire
+    printer
+      .text("========================")
+      .align("ct")
+      .style("b")
+      .size(1, 1)
+      .text("COMMANDE ANNULEE");
+    
+    // Afficher seulement le numéro client pour les commandes à emporter
+    if (!isTableOrder && (data.clientNumber || data.numeroClient)) {
+      printer
+        .style("normal")
+        .text(`Client N°${data.clientNumber || data.numeroClient}`);
+    }
+    
+    printer
+      .style("b")
+      .text("ANNULE")
+      .cut();
+
+    setTimeout(() => {
+      printer.close();
+      callback(null);
+    }, 500);
+  });
+}
 
 module.exports = {
   printTicket,
+  printCancelTicket,  // ✅ NOUVEAU
   getStatus
 };
