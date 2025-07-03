@@ -100,61 +100,52 @@ function formatPortionInfo(item) {
   return portionText;
 }
 
-// ✅ Fonction pour imprimer les détails des menus composés
+// ✅ Fonction pour imprimer les détails des menus composés - VERSION SIMPLIFIÉE
 function printComposedMenuDetails(printer, item) {
-  if (!item.isComposed || !item.composedDetails) return;
+  console.log(`🔍 DEBUG: Checking composed menu for ${item.nom}`);
+  console.log(`🔍 DEBUG: isComposed = ${item.isComposed}`);
+  console.log(`🔍 DEBUG: composedDetails =`, item.composedDetails);
   
-  // Titre pour les personnalisations
-  printer
-    .style("normal")
-    .size(1, 0)
-    .text("  > Personnalise :");
+  if (!item.isComposed || !item.composedDetails || !Array.isArray(item.composedDetails)) {
+    console.log(`❌ DEBUG: Not a composed menu or no details`);
+    return;
+  }
   
-  // Afficher chaque étape de personnalisation
-  item.composedDetails.forEach((detail, index) => {
-    // Nom de l'étape (ex: "Viande", "Sauce")
-    printer
-      .style("b")
-      .size(1, 0)
-      .text(`    ${removeAccents(detail.stepLabel)} :`);
+  console.log(`✅ DEBUG: Processing ${item.composedDetails.length} steps`);
+  
+  // Parcourir toutes les étapes et afficher tous les choix avec des tirets
+  item.composedDetails.forEach((detail, stepIndex) => {
+    console.log(`🔍 DEBUG: Step ${stepIndex + 1}: ${detail.stepLabel}`);
+    console.log(`🔍 DEBUG: Items:`, detail.items);
     
-    // Articles sélectionnés pour cette étape
-    detail.items.forEach((selectedItem) => {
-      let itemText = `      * ${removeAccents(selectedItem.nom)}`;
+    if (!detail.items || !Array.isArray(detail.items)) {
+      console.log(`❌ DEBUG: No items in step ${stepIndex + 1}`);
+      return;
+    }
+    
+    // Afficher chaque choix avec un tiret
+    detail.items.forEach((selectedItem, itemIndex) => {
+      console.log(`🔍 DEBUG: Item ${itemIndex + 1}: ${selectedItem.nom}`);
       
-      // Ajuster la taille d'affichage pour cette ligne
-      const itemLines = wrapText(itemText, 30);
+      const itemText = `  * ${removeAccents(selectedItem.nom)}`;
       
       printer
         .style("normal")
-        .size(1, 0);
+        .size(1, 1)
+        .text(itemText);
       
-      itemLines.forEach(line => {
-        printer.text(line);
-      });
-      
-      // Note personnalisée pour cet item
+      // Note personnalisée si présente
       if (selectedItem.note && selectedItem.note.trim()) {
-        const noteText = `        NOTE: ${removeAccents(selectedItem.note)}`;
-        const noteLines = wrapText(noteText, 28);
-        
-        printer.size(0, 0); // Très petit pour les notes
-        noteLines.forEach(noteLine => {
-          printer.text(noteLine);
-        });
+        console.log(`🔍 DEBUG: Adding note: ${selectedItem.note}`);
+        printer
+          .style("normal")
+          .size(1, 1)
+          .text(`    NOTE: ${removeAccents(selectedItem.note)}`);
       }
     });
-    
-    // Espace entre les étapes
-    if (index < item.composedDetails.length - 1) {
-      printer.text("");
-    }
   });
   
-  // Ligne de séparation après les détails composés
-  printer
-    .size(1, 1)
-    .text("  ........................");
+  console.log(`✅ DEBUG: Finished printing composed menu`);
 }
 
 // ✅ Fonction d'impression de ticket normal
@@ -187,7 +178,7 @@ function printTicket(ip, data, callback) {
     });
     
     printer
-      .text(`${removeAccents(data.commandeId || "-")} | ${timestamp}`)
+      .text(`${timestamp}`)
       .text("========================")
       .align("lt");
 
