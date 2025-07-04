@@ -192,7 +192,6 @@ function printTicket(ip, data, callback) {
         .text("------------------------");
     }
 
-    // ✅ Traitement des produits avec support complet du nouveau workflow
     data.produits.forEach((item, itemIndex) => {
       // ✅ Nom du produit avec quantité et portion
       let productName = removeAccents(item.nom);
