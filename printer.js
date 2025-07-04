@@ -150,6 +150,7 @@ function printComposedMenuDetails(printer, item) {
 
 // ✅ Fonction d'impression de ticket normal
 function printTicket(ip, data, callback) {
+  console.log("DATA passed to PrintTIcket : ", data)
   const device = getDevice(ip);
   if (!device) return callback(new Error("Aucune imprimante détectée"));
 
