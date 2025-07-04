@@ -150,7 +150,6 @@ function printComposedMenuDetails(printer, item) {
 
 // ✅ Fonction d'impression de ticket normal
 function printTicket(ip, data, callback) {
-  console.log("DATA passed to PrintTIcket : ", data)
   const device = getDevice(ip);
   if (!device) return callback(new Error("Aucune imprimante détectée"));
 
@@ -210,9 +209,6 @@ function printTicket(ip, data, callback) {
         printer.text(line);
       });
       
-      console.log(`✅ item.isComposed = `, item.isComposed, typeof item.isComposed);
-
-      console.log("DEBUG composedDetails:", item.composedDetails, typeof item.composedDetails);
       // ✅ Gestion des menus composés (nouveau)
       if (item.isComposed) {
         printComposedMenuDetails(printer, item);
