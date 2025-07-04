@@ -208,7 +208,10 @@ function printTicket(ip, data, callback) {
       productLines.forEach(line => {
         printer.text(line);
       });
+      
       console.log(`✅ item.isComposed = `, item.isComposed, typeof item.isComposed);
+
+      console.log("DEBUG composedDetails:", item.composedDetails, typeof item.composedDetails);
       // ✅ Gestion des menus composés (nouveau)
       if (item.isComposed) {
         printComposedMenuDetails(printer, item);
