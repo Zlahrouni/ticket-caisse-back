@@ -158,7 +158,7 @@ function printTicket(ip, data, callback) {
     if (error) return callback(error);
 
     // ✅ Header normal avec détection du type
-    const isTableOrder = data.table && data.table !== 'EMPORTER';
+    const isTableOrder = data.mode === 'sur_place';
     const orderType = isTableOrder ? 'TABLE' : 'EMPORTER';
     const orderNumber = isTableOrder ? data.table : (data.clientNumber || data.numeroClient || '?');
 
@@ -216,7 +216,8 @@ function printTicket(ip, data, callback) {
       
       // ✅ Instructions spéciales classiques (améliorées)
       if (item.specialInstructions && item.specialInstructions.trim()) {
-        const instruction = `Instruction: ${removeAccents(item.specialInstructions)}`;
+        const instruction = `Note: ${removeAccents(item.specialInstructions)}`;
+        console.log("DEBUG: ", instruction)
         const instructionLines = wrapText(instruction, 30);
         
         printer
@@ -242,15 +243,6 @@ function printTicket(ip, data, callback) {
       .align("ct")
       .style("normal")
       .size(1, 1);
-    
-    // Afficher seulement le numéro client pour les commandes à emporter
-    if (!isTableOrder && (data.clientNumber || data.numeroClient)) {
-      printer.text(`Client N°${data.clientNumber || data.numeroClient}`);
-    }
-    
-    printer
-      .text("FIN TICKET")
-      .cut();
 
     setTimeout(() => {
       printer.close();

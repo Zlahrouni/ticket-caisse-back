@@ -46,14 +46,20 @@ function ensureLogDirectory() {
   return logDir;
 }
 
-// ✅ Fonction pour générer un aperçu textuel du ticket normal
 function generateTicketPreview(data, includeTimestamp = true) {
   const lines = [];
   
-  // Header
-  const isTableOrder = data.table && data.table !== 'EMPORTER';
+  // ✅ NOUVELLE LOGIQUE: Utiliser le champ mode au lieu de détecter via table
+  const isTableOrder = data.mode === 'sur_place';
   const orderType = isTableOrder ? 'TABLE' : 'EMPORTER';
-  const orderNumber = isTableOrder ? data.table : (data.clientNumber || data.numeroClient || '?');
+  
+  // ✅ Logique simplifiée pour le numéro
+  let orderNumber;
+  if (isTableOrder) {
+    orderNumber = data.table || '?';
+  } else {
+    orderNumber = data.numeroClient || data.clientNumber || '?';
+  }
   
   lines.push('================================');
   lines.push(`        ${orderType} ${orderNumber}        `);
@@ -70,6 +76,7 @@ function generateTicketPreview(data, includeTimestamp = true) {
   
   lines.push(`Commande: ${data.commandeId || "ID-INCONNU"}`);
   lines.push(`Heure: ${timestamp}`);
+  lines.push(`Mode: ${data.mode || 'NON-SPECIFIE'}`); // ✅ Debug info
   lines.push('--------------------------------');
   
   // Note globale de la commande si présente
@@ -79,13 +86,11 @@ function generateTicketPreview(data, includeTimestamp = true) {
     lines.push('--------------------------------');
   }
   
-  // Traitement des produits
+  // ✅ Traitement des produits avec la même logique que printComposedMenuDetails
   data.produits.forEach((item, itemIndex) => {
-    // Nom du produit avec quantité et portion
     let productName = item.nom;
     
-    // Gestion des portions
-    /**
+    // ✅ Gestion des portions (comme dans formatPortionInfo)
     if (item.portionInfo) {
       let portionText = item.portionInfo;
       const portionMap = {
@@ -100,36 +105,50 @@ function generateTicketPreview(data, includeTimestamp = true) {
       for (const [key, value] of Object.entries(portionMap)) {
         portionText = portionText.replace(key, value);
       }
-      productName += ` (${portionText})`;
+      productName += portionText;
     }
-     */
+    
     const productLine = `${item.quantite}x ${productName}`;
     lines.push(productLine);
     
-    // Gestion des menus composés
-    if (item.isComposed && item.composedDetails) {
-      lines.push("  > Personnalisations :");
+    // ✅ Gestion des menus composés - MÊME LOGIQUE que printComposedMenuDetails
+    if (item.isComposed && item.composedDetails && Array.isArray(item.composedDetails)) {
+      console.log(`🔍 PREVIEW DEBUG: Processing composed menu for ${item.nom}`);
+      console.log(`🔍 PREVIEW DEBUG: Found ${item.composedDetails.length} steps`);
       
-      item.composedDetails.forEach((detail, index) => {
-        lines.push(`    ${detail.stepLabel} :`);
+      // Parcourir toutes les étapes et afficher tous les choix avec des tirets
+      item.composedDetails.forEach((detail, stepIndex) => {
+        console.log(`🔍 PREVIEW DEBUG: Step ${stepIndex + 1}: ${detail.stepLabel}`);
+        console.log(`🔍 PREVIEW DEBUG: Items:`, detail.items);
         
-        detail.items.forEach((selectedItem) => {
-          lines.push(`      * ${selectedItem.nom}`);
+        if (!detail.items || !Array.isArray(detail.items)) {
+          console.log(`❌ PREVIEW DEBUG: No items in step ${stepIndex + 1}`);
+          return;
+        }
+        
+        // Ajouter le label de l'étape (optionnel, pour plus de clarté)
+        // lines.push(`    ${detail.stepLabel}:`);
+        
+        // Afficher chaque choix avec un tiret (exactement comme printComposedMenuDetails)
+        detail.items.forEach((selectedItem, itemIndex) => {
+          console.log(`🔍 PREVIEW DEBUG: Item ${itemIndex + 1}: ${selectedItem.nom}`);
           
+          // ✅ MÊME FORMAT que printComposedMenuDetails
+          const itemText = `  * ${selectedItem.nom}`;
+          lines.push(itemText);
+          
+          // Note personnalisée si présente (même logique)
           if (selectedItem.note && selectedItem.note.trim()) {
-            lines.push(`        NOTE: ${selectedItem.note}`);
+            console.log(`🔍 PREVIEW DEBUG: Adding note: ${selectedItem.note}`);
+            lines.push(`    NOTE: ${selectedItem.note}`);
           }
         });
-        
-        if (index < item.composedDetails.length - 1) {
-          lines.push("");
-        }
       });
       
-      lines.push("  ........................");
+      console.log(`✅ PREVIEW DEBUG: Finished processing composed menu`);
     }
     
-    // Instructions spéciales classiques
+    // ✅ Instructions spéciales classiques
     if (item.specialInstructions && item.specialInstructions.trim()) {
       lines.push(`  Instruction: ${item.specialInstructions}`);
     }
@@ -142,12 +161,7 @@ function generateTicketPreview(data, includeTimestamp = true) {
 
   // Footer
   lines.push('================================');
-  
-  // Numéro client pour les commandes à emporter
-  if (!isTableOrder && (data.clientNumber || data.numeroClient)) {
-    lines.push(`Client N°${data.clientNumber || data.numeroClient}`);
-  }
-  
+
   lines.push('         FIN TICKET');
   lines.push('================================');
   lines.push('');
@@ -301,11 +315,15 @@ function createLogFile(data) {
       '',
       '--- ANALYSE ---',
       `IP fournie: ${data.ip || 'NON SPÉCIFIÉE'}`,
-      `Type commande: ${data.table && data.table !== 'EMPORTER' ? 'Sur place' : 'À emporter'}`,
+      // ✅ CORRECTION: Utiliser le champ mode
+      `Mode commande: ${data.mode || 'NON SPÉCIFIÉ'}`,
+      `Type commande: ${data.mode === 'sur_place' ? 'Sur place' : data.mode === 'emporter' ? 'À emporter' : 'Inconnu'}`,
+      `Numéro: ${data.mode === 'sur_place' ? (data.table || 'N/A') : (data.numeroClient || data.clientNumber || 'N/A')}`,
       `Nombre d'articles: ${data.produits ? data.produits.length : 0}`,
       `Menus composés: ${data.produits && data.produits.some(p => p.isComposed) ? 'OUI' : 'NON'}`,
       `Portions spéciales: ${data.produits && data.produits.some(p => p.portionInfo) ? 'OUI' : 'NON'}`,
       `Instructions spéciales: ${data.produits && data.produits.some(p => p.specialInstructions) ? 'OUI' : 'NON'}`,
+      `Note globale: ${data.noteCommande ? 'OUI' : 'NON'}`,
       '',
       '========================================',
       '              FIN LOG                  ',

@@ -1,0 +1,50 @@
+========================================
+         LOG TICKET IMPRESSION         
+========================================
+Date: 06/07/2025 14:40:33
+Fichier: 2025-07-06_12-40-33_-OUUk-cwOPli4oFzcws7.log
+
+--- DONNÉES POST REÇUES ---
+{
+  "ip": "192.168.1.146",
+  "table": 0,
+  "mode": "emporter",
+  "numeroClient": "dd",
+  "commandeId": "-OUUk-cwOPli4oFzcws7",
+  "produits": [
+    {
+      "nom": "Tabouleh (demi part)",
+      "quantite": 1,
+      "portionInfo": " (demi part)"
+    }
+  ]
+}
+
+--- APERÇU TICKET GÉNÉRÉ ---
+================================
+        EMPORTER dd        
+================================
+Commande: -OUUk-cwOPli4oFzcws7
+Heure: 14:40:33
+Mode: emporter
+--------------------------------
+1x Tabouleh (demi part) ( (1/2))
+================================
+         FIN TICKET
+================================
+
+
+--- ANALYSE ---
+IP fournie: 192.168.1.146
+Mode commande: emporter
+Type commande: À emporter
+Numéro: dd
+Nombre d'articles: 1
+Menus composés: NON
+Portions spéciales: OUI
+Instructions spéciales: NON
+Note globale: NON
+
+========================================
+              FIN LOG                  
+========================================
