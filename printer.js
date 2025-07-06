@@ -271,7 +271,7 @@ function printCancelTicket(ip, data, callback) {
       .size(2, 2)
       .text("ANNULE")
       .size(2, 1)
-      .text(`${orderType} ${removeAccents(orderNumber.toString())}`)
+      .text(`${orderType} (${removeAccents(orderNumber.toString())})`)
       .size(1, 1)
       .style("normal");
 

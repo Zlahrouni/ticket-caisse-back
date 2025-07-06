@@ -62,7 +62,7 @@ function generateTicketPreview(data, includeTimestamp = true) {
   }
   
   lines.push('================================');
-  lines.push(`        ${orderType} ${orderNumber}        `);
+  lines.push(`        ${orderType} (${orderNumber})        `);
   lines.push('================================');
   
   // Informations de commande
