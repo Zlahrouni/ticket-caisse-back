@@ -29,9 +29,6 @@ function getStatus(callback) {
   }
 }
 
-function removeAccents(str) {
-  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-}
 
 // Fonction pour découper le texte avec gestion de la césure française
 function wrapText(text, maxWidth = 32) {
@@ -77,6 +74,30 @@ function wrapText(text, maxWidth = 32) {
   
   return lines;
 }
+
+function sanitizeText(str) {
+  if (!str) return "";
+  
+  return String(str)
+    // remplacer caractères non supportés
+    .replace(/œ/g, "oe")
+    .replace(/Œ/g, "Oe")
+    .replace(/æ/g, "ae")
+    .replace(/Æ/g, "Ae")
+
+    // normaliser accents
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+
+    // autres caractères rarement pris en charge
+    .replace(/€/g, "EUR")
+    .replace(/[–—]/g, "-")
+    .replace(/…/g, "...")
+    .replace(/[«»]/g, '"')
+    .replace(/[’]/g, "'");
+
+}
+
 
 // ✅ Fonction pour formater l'affichage des portions
 function formatPortionInfo(item) {
@@ -127,7 +148,7 @@ function printComposedMenuDetails(printer, item) {
     detail.items.forEach((selectedItem, itemIndex) => {
       console.log(`🔍 DEBUG: Item ${itemIndex + 1}: ${selectedItem.nom}`);
       
-      const itemText = `  * ${removeAccents(selectedItem.nom)}`;
+      const itemText = `  * ${sanitizeText(selectedItem.nom)}`;
       
       printer
         .style("normal")
@@ -140,7 +161,7 @@ function printComposedMenuDetails(printer, item) {
         printer
           .style("normal")
           .size(1, 1)
-          .text(`    NOTE: ${removeAccents(selectedItem.note)}`);
+          .text(`    NOTE: ${sanitizeText(selectedItem.note)}`);
       }
     });
   });
@@ -154,102 +175,164 @@ function printTicket(ip, data, callback) {
   if (!device) return callback(new Error("Aucune imprimante détectée"));
 
   const printer = new escpos.Printer(device);
-  device.open(function (error) {
+
+  device.open((error) => {
     if (error) return callback(error);
 
-    // ✅ Header normal avec détection du type
-    const isTableOrder = data.mode === 'sur_place';
-    const orderType = isTableOrder ? 'TABLE' : 'EMPORTER';
-    const orderNumber = isTableOrder ? data.table : (data.clientNumber || data.numeroClient || '?');
+    try {
+      // ---------------------------
+      // 1) Normalisation des données
+      // ---------------------------
 
-    printer
-      .align("ct")
-      .style("b")
-      .size(2, 1)
-      .text(`${orderType} ${removeAccents(orderNumber.toString())}`)
-      .size(1, 1)
-      .style("normal");
+      const isNewFormat = Array.isArray(data.items);
+      const isOldFormat = Array.isArray(data.produits);
 
-    // ✅ Informations de commande
-    const timestamp = data.timestamp || new Date().toLocaleTimeString("fr-FR", { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      second: '2-digit'
-    });
-    
-    printer
-      .text(`${timestamp}`)
-      .text("========================")
-      .align("lt");
+      const service =
+        data.serviceType === "DINING" ? "TABLE"
+        : data.serviceType === "TAKEAWAY" ? "EMPORTER"
+        : data.serviceType === "DELIVERY" ? "LIVRAISON"
+        : sanitizeText(data.serviceType || "SERVICE");
 
-    // ✅ Note globale de la commande si présente
-    if (data.noteCommande && data.noteCommande.trim()) {
-      printer
-        .style("b")
-        .text("NOTE GLOBALE:")
-        .style("normal")
-        .text(`> ${removeAccents(data.noteCommande)}`)
-        .text("------------------------");
-    }
+      const orderNumber =
+        sanitizeText(data.orderNumber ?? data.commandeId ?? "?");
 
-    data.produits.forEach((item, itemIndex) => {
-      // ✅ Nom du produit avec quantité et portion
-      let productName = removeAccents(item.nom);
-      const portionInfo = formatPortionInfo(item);
-      if (portionInfo) {
-        productName += ` (${portionInfo})`;
+      const time = formatTimestamp(data.timestamp);
+
+      // Transforme ancien format → format items unifié
+      let items = [];
+
+      if (isNewFormat) {
+        items = data.items.map(item => ({
+          qty: item.quantity ?? item.quantite ?? 1,
+          name: item.name || item.nom || "Article",
+          price: item.price,
+          menuConfig: item.menuConfig
+        }));
       }
-      
-      const productLine = `${item.quantite}x ${productName}`;
-      const productLines = wrapText(productLine, 32);
-      
-      // Nom du produit en gras
-      printer.style("b");
-      productLines.forEach(line => {
-        printer.text(line);
-      });
-      
-      // ✅ Gestion des menus composés (nouveau)
-      if (item.isComposed) {
-        printComposedMenuDetails(printer, item);
+
+      else if (isOldFormat) {
+        items = data.produits.map(item => ({
+          qty: item.quantite ?? 1,
+          name: item.nom || "Article",
+          price: item.prix,
+          menuConfig: item.isComposed
+            ? convertComposedDetailsToMenuConfig(item.composedDetails)
+            : null
+        }));
       }
-      
-      // ✅ Instructions spéciales classiques (améliorées)
-      if (item.specialInstructions && item.specialInstructions.trim()) {
-        const instruction = `Note: ${removeAccents(item.specialInstructions)}`;
-        console.log("DEBUG: ", instruction)
-        const instructionLines = wrapText(instruction, 30);
-        
-        printer
-          .style("normal")
-          .size(1, 0);
-        
-        instructionLines.forEach(line => {
-          printer.text(`  ${line}`);
+
+      else {
+        items = [];
+      }
+
+      // Helper conversion vieux format → nouveau
+      function convertComposedDetailsToMenuConfig(composedDetails) {
+        const out = {};
+        if (!Array.isArray(composedDetails)) return out;
+        composedDetails.forEach(step => {
+          const label = step.stepLabel || "Choix";
+          out[label] = step.items.map(i => i.nom);
         });
-        
-        printer.size(1, 1);
+        return out;
       }
-      
-      // ✅ Espacement entre les produits
-      if (itemIndex < data.produits.length - 1) {
-        printer.text("------------------------");
+
+
+      // ---------------------------
+      // 2) Impression header
+      //----------------------------
+      printer
+        .align("ct")
+        .style("b")
+        .size(2, 1)
+        .text(`${service} ${orderNumber}`)
+        .size(1, 1)
+        .style("normal");
+
+      if (data.tableInfo?.tableNumber || data.tableInfo?.tableId) {
+        const tableNumber = data.tableInfo.tableNumber;
+        const zone = data.tableInfo.zoneName
+          ? ` (${sanitizeText(data.tableInfo.zoneName)})`
+          : "";
+        printer.text(`Table: ${sanitizeText(tableNumber)}${zone}`);
       }
-    });
 
-    // ✅ Footer normal - garde seulement l'essentiel
-    printer
-      .text("========================")
-      .align("ct")
-      .style("normal")
-      .size(1, 1);
+      printer.text(time);
+      printer.text("========================").align("lt");
 
-    setTimeout(() => {
+      // ---------------------------
+      // 3) Impression des items
+      // ---------------------------
+      if (items.length === 0) {
+        printer.text("Aucun article");
+      } else {
+        items.forEach((item, idx) => {
+          const qty = item.qty ?? 1;
+          const name = sanitizeText(item.name);
+          const price = item.price != null ? ` - ${item.price}EUR` : "";
+          const line = `${qty}x ${name}${price}`;
+
+          wrapText(line, 32).forEach((l) =>
+            printer.style("b").text(l)
+          );
+
+          // --- MENU CONFIG (nouveau + ancien format unifié) ---
+          if (item.menuConfig && typeof item.menuConfig === "object") {
+            Object.keys(item.menuConfig).forEach((groupKey) => {
+              const groupItems = item.menuConfig[groupKey];
+              if (Array.isArray(groupItems)) {
+                groupItems.forEach((sub) => {
+                  printer.text(`    - ${sanitizeText(sub)}`);
+                });
+              }
+            });
+          }
+
+          if (idx < items.length - 1) {
+            printer.text("------------------------");
+          }
+        });
+      }
+
+      // ---------------------------
+      // FOOTER
+      // ---------------------------
+      printer.text("========================");
+      printer.text("");
+      printer.text("");
+      printer.text("");
+
+      printer.cut();
       printer.close();
       callback(null);
-    }, 500);
+
+    } catch (err) {
+      try { printer.close(); } catch {}
+      callback(err);
+    }
   });
 }
+
+
+function formatTimestamp(ts) {
+  if (!ts) return "";
+
+  const date = new Date(ts);
+
+  if (isNaN(date.getTime())) return "";
+
+  const pad = (n) => String(n).padStart(2, "0");
+
+  const day = pad(date.getDate());
+  const month = pad(date.getMonth() + 1);
+  const year = date.getFullYear();
+
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
+}
+
+
 
 // ✅ Fonction d'impression de ticket d'annulation - NOUVELLE
 function printCancelTicket(ip, data, callback) {
@@ -271,7 +354,7 @@ function printCancelTicket(ip, data, callback) {
       .size(2, 2)
       .text("ANNULE")
       .size(2, 1)
-      .text(`${orderType} (${removeAccents(orderNumber.toString())})`)
+      .text(`${orderType} (${sanitizeText(orderNumber.toString())})`)
       .size(1, 1)
       .style("normal");
 
@@ -283,7 +366,7 @@ function printCancelTicket(ip, data, callback) {
     });
     
     printer
-      .text(`${removeAccents(data.commandeId || "-")} | ${timestamp}`)
+      .text(`${sanitizeText(data.commandeId || "-")} | ${timestamp}`)
       .style("b")
       .text("COMMANDE ANNULEE")
       .style("normal")
@@ -297,7 +380,7 @@ function printCancelTicket(ip, data, callback) {
         .text("RAISON:")
         .style("normal");
       
-      const reasonLines = wrapText(`> ${removeAccents(data.cancellationReason)}`, 30);
+      const reasonLines = wrapText(`> ${sanitizeText(data.cancellationReason)}`, 30);
       reasonLines.forEach(line => {
         printer.text(line);
       });
@@ -312,7 +395,7 @@ function printCancelTicket(ip, data, callback) {
         .text("NOTE GLOBALE:")
         .style("normal");
       
-      const noteLines = wrapText(`> ${removeAccents(data.noteCommande)}`, 30);
+      const noteLines = wrapText(`> ${sanitizeText(data.noteCommande)}`, 30);
       noteLines.forEach(line => {
         printer.text(line);
       });
@@ -323,7 +406,7 @@ function printCancelTicket(ip, data, callback) {
     // ✅ Traitement des produits (même logique que printTicket normal)
     data.produits.forEach((item, itemIndex) => {
       // Nom du produit avec quantité et portion
-      let productName = removeAccents(item.nom);
+      let productName = sanitizeText(item.nom);
       const portionInfo = formatPortionInfo(item);
       if (portionInfo) {
         productName += ` (${portionInfo})`;
@@ -345,7 +428,7 @@ function printCancelTicket(ip, data, callback) {
       
       // Instructions spéciales classiques
       if (item.specialInstructions && item.specialInstructions.trim()) {
-        const instruction = `Instruction: ${removeAccents(item.specialInstructions)}`;
+        const instruction = `Instruction: ${sanitizeText(item.specialInstructions)}`;
         const instructionLines = wrapText(instruction, 30);
         
         printer

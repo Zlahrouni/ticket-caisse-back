@@ -524,36 +524,25 @@ app.post("/print-preview", (req, res) => {
 
 // 🧾 Impression ticket normal - ✅ Compatible avec l'ancien ET le nouveau workflow
 app.post("/print-ticket", (req, res) => {
-  const ip = req.body.ip;
   const data = req.body;
 
-  if (!ip) {
-    return res.status(400).json({ error: "IP de l'imprimante manquante (champ 'ip')" });
-  }
-  if (!data.produits || !Array.isArray(data.produits)) {
-    return res.status(400).json({ error: "Produits manquants ou invalides", received: data });
+  if (!data.ip) {
+    return res.status(400).json({ error: "IP de l'imprimante manquante" });
   }
 
-  // ✅ Log détaillé pour debug (optionnel)
-  console.log(`🖨️ Impression ${data.table || 'EMPORTER'} - ${data.commandeId || 'ID?'} - ${data.produits.length} article(s)`);
-  
-  // ✅ Détection des nouvelles fonctionnalités (pour info)
-  const hasComposedMenus = data.produits.some(item => item.isComposed);
-  const hasPortions = data.produits.some(item => item.portionInfo);
-  if (hasComposedMenus || hasPortions) {
-    console.log(`  ✨ Nouveau workflow détecté: ${hasComposedMenus ? 'menus composés' : ''} ${hasPortions ? 'portions' : ''}`);
+  if (!data.items || !Array.isArray(data.items)) {
+    return res.status(400).json({ error: "Items manquants ou invalides" });
   }
 
-  printTicket(ip, data, (err) => {
+  printTicket(data.ip, data, (err) => {
     if (err) {
-      console.error(`❌ Erreur impression: ${err.message}`);
       return res.status(500).json({ error: "Erreur impression ticket", details: err.message });
     }
-    
-    console.log(`✅ Impression réussie: ${data.table || 'EMPORTER'} - ${data.commandeId || 'ID?'}`);
     res.json({ success: true, message: "Ticket imprimé avec succès" });
   });
 });
+
+
 
 // 🧾 Impression ticket d'annulation - ✅ NOUVEAU
 app.post("/cancel-ticket", (req, res) => {
