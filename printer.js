@@ -206,6 +206,7 @@ function printTicket(ip, data, callback) {
           qty: item.quantity ?? item.quantite ?? 1,
           name: item.name || item.nom || "Article",
           price: item.price,
+          note: item.note,
           menuConfig: item.menuConfig
         }));
       }
@@ -274,6 +275,14 @@ function printTicket(ip, data, callback) {
           wrapText(line, 32).forEach((l) =>
             printer.style("b").text(l)
           );
+
+          if (item.note && item.note.trim()) {
+            wrapText(`NOTE: ${sanitizeText(item.note)}`, 30).forEach(l => {
+              printer
+                .style("normal")
+                .text(`  ${l}`);
+            });
+          }
 
           // --- MENU CONFIG (nouveau + ancien format unifié) ---
           if (item.menuConfig && typeof item.menuConfig === "object") {

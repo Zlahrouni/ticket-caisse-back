@@ -5,6 +5,7 @@ const bodyParser = require("body-parser");
 const escpos = require("escpos");
 const fs = require("fs");
 const path = require("path");
+const swaggerUi = require('swagger-ui-express');
 
 escpos.Network = require("escpos-network");
 
@@ -14,6 +15,29 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const API_KEY = process.env.PRINT_API_KEY;
 
+// ============================================
+// SWAGGER SETUP
+// ============================================
+let swaggerDocument;
+try {
+  swaggerDocument = require('./swagger-output.json');
+  console.log('📚 Documentation Swagger chargée');
+} catch (error) {
+  console.warn('⚠️  swagger-output.json non trouvé. Exécutez: node swagger.js');
+}
+
+// Servir la documentation Swagger à /api-docs
+if (swaggerDocument) {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'API Impression Tickets - Documentation'
+  }));
+  console.log('📖 Documentation disponible sur: http://localhost:3001/api-docs');
+}
+
+// ============================================
+// MIDDLEWARE
+// ============================================
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'OPTIONS'],
@@ -35,6 +59,10 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// ============================================
+// FONCTIONS UTILITAIRES
+// ============================================
 
 // ✅ Fonction pour s'assurer que le dossier logs existe
 function ensureLogDirectory() {
@@ -76,7 +104,7 @@ function generateTicketPreview(data, includeTimestamp = true) {
   
   lines.push(`Commande: ${data.commandeId || "ID-INCONNU"}`);
   lines.push(`Heure: ${timestamp}`);
-  lines.push(`Mode: ${data.mode || 'NON-SPECIFIE'}`); // ✅ Debug info
+  lines.push(`Mode: ${data.mode || 'NON-SPECIFIE'}`);
   lines.push('--------------------------------');
   
   // Note globale de la commande si présente
@@ -86,11 +114,11 @@ function generateTicketPreview(data, includeTimestamp = true) {
     lines.push('--------------------------------');
   }
   
-  // ✅ Traitement des produits avec la même logique que printComposedMenuDetails
+  // Traitement des produits
   data.produits.forEach((item, itemIndex) => {
     let productName = item.nom;
     
-    // ✅ Gestion des portions (comme dans formatPortionInfo)
+    // Gestion des portions
     if (item.portionInfo) {
       let portionText = item.portionInfo;
       const portionMap = {
@@ -111,44 +139,23 @@ function generateTicketPreview(data, includeTimestamp = true) {
     const productLine = `${item.quantite}x ${productName}`;
     lines.push(productLine);
     
-    // ✅ Gestion des menus composés - MÊME LOGIQUE que printComposedMenuDetails
+    // Gestion des menus composés
     if (item.isComposed && item.composedDetails && Array.isArray(item.composedDetails)) {
-      console.log(`🔍 PREVIEW DEBUG: Processing composed menu for ${item.nom}`);
-      console.log(`🔍 PREVIEW DEBUG: Found ${item.composedDetails.length} steps`);
-      
-      // Parcourir toutes les étapes et afficher tous les choix avec des tirets
-      item.composedDetails.forEach((detail, stepIndex) => {
-        console.log(`🔍 PREVIEW DEBUG: Step ${stepIndex + 1}: ${detail.stepLabel}`);
-        console.log(`🔍 PREVIEW DEBUG: Items:`, detail.items);
+      item.composedDetails.forEach((detail) => {
+        if (!detail.items || !Array.isArray(detail.items)) return;
         
-        if (!detail.items || !Array.isArray(detail.items)) {
-          console.log(`❌ PREVIEW DEBUG: No items in step ${stepIndex + 1}`);
-          return;
-        }
-        
-        // Ajouter le label de l'étape (optionnel, pour plus de clarté)
-        // lines.push(`    ${detail.stepLabel}:`);
-        
-        // Afficher chaque choix avec un tiret (exactement comme printComposedMenuDetails)
-        detail.items.forEach((selectedItem, itemIndex) => {
-          console.log(`🔍 PREVIEW DEBUG: Item ${itemIndex + 1}: ${selectedItem.nom}`);
-          
-          // ✅ MÊME FORMAT que printComposedMenuDetails
+        detail.items.forEach((selectedItem) => {
           const itemText = `  * ${selectedItem.nom}`;
           lines.push(itemText);
           
-          // Note personnalisée si présente (même logique)
           if (selectedItem.note && selectedItem.note.trim()) {
-            console.log(`🔍 PREVIEW DEBUG: Adding note: ${selectedItem.note}`);
             lines.push(`    NOTE: ${selectedItem.note}`);
           }
         });
       });
-      
-      console.log(`✅ PREVIEW DEBUG: Finished processing composed menu`);
     }
     
-    // ✅ Instructions spéciales classiques
+    // Instructions spéciales classiques
     if (item.specialInstructions && item.specialInstructions.trim()) {
       lines.push(`  Instruction: ${item.specialInstructions}`);
     }
@@ -161,7 +168,6 @@ function generateTicketPreview(data, includeTimestamp = true) {
 
   // Footer
   lines.push('================================');
-
   lines.push('         FIN TICKET');
   lines.push('================================');
   lines.push('');
@@ -169,11 +175,9 @@ function generateTicketPreview(data, includeTimestamp = true) {
   return lines.join('\n');
 }
 
-// ✅ Fonction pour générer un aperçu textuel du ticket d'annulation
 function generateCancelTicketPreview(data, includeTimestamp = true) {
   const lines = [];
   
-  // Header avec ANNULE
   const isTableOrder = data.table && data.table !== 'EMPORTER';
   const orderType = isTableOrder ? 'TABLE' : 'EMPORTER';
   const orderNumber = isTableOrder ? data.table : (data.clientNumber || data.numeroClient || '?');
@@ -182,7 +186,6 @@ function generateCancelTicketPreview(data, includeTimestamp = true) {
   lines.push(`      ANNULE ${orderType} ${orderNumber}      `);
   lines.push('================================');
   
-  // Informations de commande
   const timestamp = includeTimestamp ? 
     (data.timestamp || new Date().toLocaleTimeString("fr-FR", { 
       hour: '2-digit', 
@@ -196,26 +199,21 @@ function generateCancelTicketPreview(data, includeTimestamp = true) {
   lines.push('COMMANDE ANNULEE');
   lines.push('--------------------------------');
   
-  // Raison d'annulation si présente
   if (data.cancellationReason && data.cancellationReason.trim()) {
     lines.push('RAISON ANNULATION:');
     lines.push(`> ${data.cancellationReason}`);
     lines.push('--------------------------------');
   }
   
-  // Note globale de la commande si présente
   if (data.noteCommande && data.noteCommande.trim()) {
     lines.push('NOTE GLOBALE:');
     lines.push(`> ${data.noteCommande}`);
     lines.push('--------------------------------');
   }
   
-  // Traitement des produits (même logique que le ticket normal)
   data.produits.forEach((item, itemIndex) => {
-    // Nom du produit avec quantité et portion
     let productName = item.nom;
     
-    // Gestion des portions
     if (item.portionInfo) {
       let portionText = item.portionInfo;
       const portionMap = {
@@ -236,7 +234,6 @@ function generateCancelTicketPreview(data, includeTimestamp = true) {
     const productLine = `${item.quantite}x ${productName}`;
     lines.push(productLine);
     
-    // Gestion des menus composés
     if (item.isComposed && item.composedDetails) {
       lines.push("  > Personnalisations :");
       
@@ -259,21 +256,17 @@ function generateCancelTicketPreview(data, includeTimestamp = true) {
       lines.push("  ........................");
     }
     
-    // Instructions spéciales classiques
     if (item.specialInstructions && item.specialInstructions.trim()) {
       lines.push(`  Instruction: ${item.specialInstructions}`);
     }
     
-    // Espacement entre les produits
     if (itemIndex < data.produits.length - 1) {
       lines.push("------------------------");
     }
   });
 
-  // Footer
   lines.push('================================');
   
-  // Numéro client pour les commandes à emporter
   if (!isTableOrder && (data.clientNumber || data.numeroClient)) {
     lines.push(`Client N°${data.clientNumber || data.numeroClient}`);
   }
@@ -285,21 +278,18 @@ function generateCancelTicketPreview(data, includeTimestamp = true) {
   return lines.join('\n');
 }
 
-// ✅ Fonction pour créer le fichier de log normal
 function createLogFile(data) {
   try {
     const logDir = ensureLogDirectory();
     
-    // Générer le nom du fichier avec timestamp
     const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
-    const timeStr = now.toISOString().slice(11, 19).replace(/:/g, '-'); // HH-MM-SS
+    const dateStr = now.toISOString().slice(0, 10);
+    const timeStr = now.toISOString().slice(11, 19).replace(/:/g, '-');
     const commandeId = data.commandeId || 'UNKNOWN';
     
     const filename = `${dateStr}_${timeStr}_${commandeId}.log`;
     const filepath = path.join(logDir, filename);
     
-    // Contenu du fichier de log
     const logContent = [
       '========================================',
       '         LOG TICKET IMPRESSION         ',
@@ -315,7 +305,6 @@ function createLogFile(data) {
       '',
       '--- ANALYSE ---',
       `IP fournie: ${data.ip || 'NON SPÉCIFIÉE'}`,
-      // ✅ CORRECTION: Utiliser le champ mode
       `Mode commande: ${data.mode || 'NON SPÉCIFIÉ'}`,
       `Type commande: ${data.mode === 'sur_place' ? 'Sur place' : data.mode === 'emporter' ? 'À emporter' : 'Inconnu'}`,
       `Numéro: ${data.mode === 'sur_place' ? (data.table || 'N/A') : (data.numeroClient || data.clientNumber || 'N/A')}`,
@@ -330,7 +319,6 @@ function createLogFile(data) {
       '========================================'
     ].join('\n');
     
-    // Écrire le fichier
     fs.writeFileSync(filepath, logContent, 'utf8');
     
     return {
@@ -345,21 +333,18 @@ function createLogFile(data) {
   }
 }
 
-// ✅ Fonction pour créer le fichier de log d'annulation
 function createCancelLogFile(data) {
   try {
     const logDir = ensureLogDirectory();
     
-    // Générer le nom du fichier avec timestamp
     const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10); // YYYY-MM-DD
-    const timeStr = now.toISOString().slice(11, 19).replace(/:/g, '-'); // HH-MM-SS
+    const dateStr = now.toISOString().slice(0, 10);
+    const timeStr = now.toISOString().slice(11, 19).replace(/:/g, '-');
     const commandeId = data.commandeId || 'UNKNOWN';
     
     const filename = `CANCEL_${dateStr}_${timeStr}_${commandeId}.log`;
     const filepath = path.join(logDir, filename);
     
-    // Contenu du fichier de log
     const logContent = [
       '========================================',
       '      LOG TICKET ANNULATION           ',
@@ -387,7 +372,6 @@ function createCancelLogFile(data) {
       '========================================'
     ].join('\n');
     
-    // Écrire le fichier
     fs.writeFileSync(filepath, logContent, 'utf8');
     
     return {
@@ -402,8 +386,48 @@ function createCancelLogFile(data) {
   }
 }
 
-// 🧪 Test d'impression - ✅ Mis à jour avec le nouveau workflow
+// ============================================
+// ROUTES / ENDPOINTS
+// ============================================
+
+/**
+ * GET /print-test
+ * @tags Impression
+ * @summary Test d'impression avec données factices
+ * @description Envoie un ticket de test vers l'imprimante pour vérifier la connexion
+ * @param {string} ip.query.required - Adresse IP de l'imprimante (ex: 192.168.1.100)
+ * @returns {SuccessResponse} 200 - Test réussi
+ * @returns {ErrorResponse} 400 - IP manquante
+ * @returns {ErrorResponse} 500 - Erreur d'impression
+ * @security bearerAuth
+ * @example request - Exemple d'appel
+ * GET /print-test?ip=192.168.1.100
+ */
 app.get("/print-test", (req, res) => {
+  /* 
+    #swagger.tags = ['Impression']
+    #swagger.summary = 'Test d\'impression'
+    #swagger.description = 'Envoie un ticket de test avec données factices pour vérifier la connexion à l\'imprimante'
+    #swagger.parameters['ip'] = {
+      in: 'query',
+      description: 'Adresse IP de l\'imprimante thermique',
+      required: true,
+      type: 'string',
+      example: '192.168.1.100'
+    }
+    #swagger.responses[200] = {
+      description: 'Test d\'impression réussi',
+      schema: { $ref: '#/definitions/SuccessResponse' }
+    }
+    #swagger.responses[400] = {
+      description: 'IP manquante',
+      schema: { $ref: '#/definitions/ErrorResponse' }
+    }
+    #swagger.responses[500] = {
+      description: 'Erreur lors de l\'impression',
+      schema: { $ref: '#/definitions/ErrorResponse' }
+    }
+  */
   const ip = req.query.ip;
   if (!ip) {
     return res.status(400).json({ error: "IP de l'imprimante manquante (paramètre ?ip=...)" });
@@ -420,7 +444,6 @@ app.get("/print-test", (req, res) => {
         nom: "Test Connexion", 
         specialInstructions: "Impression réussie 🎉" 
       },
-      // ✅ Test menu composé
       {
         quantite: 1,
         nom: "Burger Test",
@@ -436,7 +459,6 @@ app.get("/print-test", (req, res) => {
           }
         ]
       },
-      // ✅ Test portion
       {
         quantite: 2,
         nom: "Houmous Test",
@@ -453,11 +475,38 @@ app.get("/print-test", (req, res) => {
   });
 });
 
-// ✅ NOUVEAU : Aperçu du ticket sans impression
+/**
+ * POST /print-preview
+ * @tags Test & Logging
+ * @summary Aperçu du ticket sans impression
+ * @description Génère un aperçu textuel du ticket sans l'envoyer à l'imprimante
+ * @param {CommandeNormale} request.body.required - Données de la commande
+ * @returns {PreviewResponse} 200 - Aperçu généré
+ * @returns {ErrorResponse} 400 - Données invalides
+ * @security bearerAuth
+ */
 app.post("/print-preview", (req, res) => {
+  /* 
+    #swagger.tags = ['Test & Logging']
+    #swagger.summary = 'Aperçu du ticket sans impression'
+    #swagger.description = 'Génère un aperçu textuel du ticket sans l\'envoyer à l\'imprimante. Utile pour vérifier le contenu avant impression.'
+    #swagger.parameters['body'] = {
+      in: 'body',
+      description: 'Données de la commande',
+      required: true,
+      schema: { $ref: '#/definitions/CommandeNormale' }
+    }
+    #swagger.responses[200] = {
+      description: 'Aperçu généré avec succès',
+      schema: { $ref: '#/definitions/PreviewResponse' }
+    }
+    #swagger.responses[400] = {
+      description: 'Données invalides',
+      schema: { $ref: '#/definitions/ErrorResponse' }
+    }
+  */
   const data = req.body;
   
-  // Validation des données (même que print-ticket)
   if (!data.produits || !Array.isArray(data.produits)) {
     return res.status(400).json({ 
       error: "Produits manquants ou invalides", 
@@ -472,16 +521,13 @@ app.post("/print-preview", (req, res) => {
   }
 
   try {
-    // Ajouter une IP fake pour la simulation
     const dataWithFakeIp = {
       ...data,
       ip: "FAKE-PREVIEW"
     };
     
-    // Générer l'aperçu textuel
     const preview = generateTicketPreview(dataWithFakeIp);
     
-    // Analyser les fonctionnalités utilisées
     const hasComposedMenus = data.produits.some(item => item.isComposed);
     const hasPortions = data.produits.some(item => item.portionInfo);
     const hasInstructions = data.produits.some(item => item.specialInstructions);
@@ -522,8 +568,41 @@ app.post("/print-preview", (req, res) => {
   }
 });
 
-// 🧾 Impression ticket normal - ✅ Compatible avec l'ancien ET le nouveau workflow
+/**
+ * POST /print-ticket
+ * @tags Impression
+ * @summary Impression d'un ticket de commande
+ * @description Imprime un ticket de commande sur l'imprimante thermique
+ * @param {OldWorkflowTicket} request.body.required - Données de la commande
+ * @returns {SuccessResponse} 200 - Ticket imprimé
+ * @returns {ErrorResponse} 400 - Données invalides
+ * @returns {ErrorResponse} 500 - Erreur d'impression
+ * @security bearerAuth
+ */
 app.post("/print-ticket", (req, res) => {
+  /* 
+    #swagger.tags = ['Impression']
+    #swagger.summary = 'Imprimer un ticket de commande'
+    #swagger.description = 'Imprime un ticket de commande sur l\'imprimante thermique. Utilise l\'ancien format avec "items" au lieu de "produits".'
+    #swagger.parameters['body'] = {
+      in: 'body',
+      description: 'Données de la commande',
+      required: true,
+      schema: { $ref: '#/definitions/OldWorkflowTicket' }
+    }
+    #swagger.responses[200] = {
+      description: 'Ticket imprimé avec succès',
+      schema: { $ref: '#/definitions/SuccessResponse' }
+    }
+    #swagger.responses[400] = {
+      description: 'Données invalides ou IP manquante',
+      schema: { $ref: '#/definitions/ErrorResponse' }
+    }
+    #swagger.responses[500] = {
+      description: 'Erreur lors de l\'impression',
+      schema: { $ref: '#/definitions/ErrorResponse' }
+    }
+  */
   const data = req.body;
 
   if (!data.ip) {
@@ -542,10 +621,41 @@ app.post("/print-ticket", (req, res) => {
   });
 });
 
-
-
-// 🧾 Impression ticket d'annulation - ✅ NOUVEAU
+/**
+ * POST /cancel-ticket
+ * @tags Impression
+ * @summary Impression d'un ticket d'annulation
+ * @description Imprime un ticket d'annulation de commande
+ * @param {CancelTicket} request.body.required - Données de la commande annulée
+ * @returns {SuccessResponse} 200 - Ticket d'annulation imprimé
+ * @returns {ErrorResponse} 400 - Données invalides
+ * @returns {ErrorResponse} 500 - Erreur d'impression
+ * @security bearerAuth
+ */
 app.post("/cancel-ticket", (req, res) => {
+  /* 
+    #swagger.tags = ['Impression']
+    #swagger.summary = 'Imprimer un ticket d\'annulation'
+    #swagger.description = 'Imprime un ticket d\'annulation de commande sur l\'imprimante thermique'
+    #swagger.parameters['body'] = {
+      in: 'body',
+      description: 'Données de la commande annulée',
+      required: true,
+      schema: { $ref: '#/definitions/CommandeAnnulation' }
+    }
+    #swagger.responses[200] = {
+      description: 'Ticket d\'annulation imprimé',
+      schema: { $ref: '#/definitions/SuccessResponse' }
+    }
+    #swagger.responses[400] = {
+      description: 'Données invalides ou IP manquante',
+      schema: { $ref: '#/definitions/ErrorResponse' }
+    }
+    #swagger.responses[500] = {
+      description: 'Erreur lors de l\'impression',
+      schema: { $ref: '#/definitions/ErrorResponse' }
+    }
+  */
   const ip = req.body.ip;
   const data = req.body;
 
@@ -556,13 +666,11 @@ app.post("/cancel-ticket", (req, res) => {
     return res.status(400).json({ error: "Produits manquants ou invalides", received: data });
   }
 
-  // Log détaillé pour debug
   console.log(`🚫 Annulation ${data.table || 'EMPORTER'} - ${data.commandeId || 'ID?'} - ${data.produits.length} article(s)`);
   if (data.cancellationReason) {
     console.log(`   Raison: ${data.cancellationReason}`);
   }
   
-  // Détection des nouvelles fonctionnalités
   const hasComposedMenus = data.produits.some(item => item.isComposed);
   const hasPortions = data.produits.some(item => item.portionInfo);
   if (hasComposedMenus || hasPortions) {
@@ -580,11 +688,38 @@ app.post("/cancel-ticket", (req, res) => {
   });
 });
 
-// ✅ Mode logging normal - impression dans fichier sans imprimante physique
+/**
+ * POST /print-ticket-log
+ * @tags Test & Logging
+ * @summary Mode logging pour test sans imprimante
+ * @description Enregistre le ticket dans un fichier log sans l'imprimer
+ * @param {CommandeNormale} request.body.required - Données de la commande
+ * @returns {LogResponse} 200 - Ticket enregistré dans les logs
+ * @returns {ErrorResponse} 400 - Données invalides
+ * @security bearerAuth
+ */
 app.post("/print-ticket-log", (req, res) => {
+  /* 
+    #swagger.tags = ['Test & Logging']
+    #swagger.summary = 'Mode logging - Test sans imprimante'
+    #swagger.description = 'Enregistre le ticket dans un fichier log au lieu de l\'imprimer. Idéal pour tester sans matériel physique.'
+    #swagger.parameters['body'] = {
+      in: 'body',
+      description: 'Données de la commande',
+      required: true,
+      schema: { $ref: '#/definitions/CommandeNormale' }
+    }
+    #swagger.responses[200] = {
+      description: 'Ticket enregistré dans les logs',
+      schema: { $ref: '#/definitions/LogResponse' }
+    }
+    #swagger.responses[400] = {
+      description: 'Données invalides',
+      schema: { $ref: '#/definitions/ErrorResponse' }
+    }
+  */
   const data = req.body;
 
-  // Validation des données (même que print-ticket)
   if (!data.produits || !Array.isArray(data.produits)) {
     return res.status(400).json({ 
       error: "Produits manquants ou invalides", 
@@ -599,10 +734,8 @@ app.post("/print-ticket-log", (req, res) => {
   }
 
   try {
-    // Log dans la console (même format que print-ticket normal)
     console.log(`📝 [LOG MODE] Impression ${data.table || 'EMPORTER'} - ${data.commandeId || 'ID?'} - ${data.produits.length} article(s)`);
     
-    // Détection des nouvelles fonctionnalités
     const hasComposedMenus = data.produits.some(item => item.isComposed);
     const hasPortions = data.produits.some(item => item.portionInfo);
     const hasInstructions = data.produits.some(item => item.specialInstructions);
@@ -612,15 +745,12 @@ app.post("/print-ticket-log", (req, res) => {
       console.log(`  ✨ [LOG] Nouveau workflow détecté: ${hasComposedMenus ? 'menus composés' : ''} ${hasPortions ? 'portions' : ''}`);
     }
     
-    // Créer le fichier de log
     const logInfo = createLogFile(data);
     
     console.log(`✅ [LOG] Ticket enregistré dans: ${logInfo.filename} (${logInfo.size} bytes)`);
     
-    // Générer l'aperçu pour la réponse
     const preview = generateTicketPreview(data, true);
     
-    // Réponse similaire à print-ticket mais avec infos de logging
     res.json({
       success: true,
       message: "Ticket enregistré dans les logs (mode test)",
@@ -653,11 +783,38 @@ app.post("/print-ticket-log", (req, res) => {
   }
 });
 
-// ✅ Mode logging annulation - ✅ NOUVEAU
+/**
+ * POST /cancel-ticket-log
+ * @tags Test & Logging
+ * @summary Mode logging pour annulation sans imprimante
+ * @description Enregistre le ticket d'annulation dans un fichier log
+ * @param {CancelTicket} request.body.required - Données de la commande annulée
+ * @returns {LogResponse} 200 - Ticket d'annulation enregistré
+ * @returns {ErrorResponse} 400 - Données invalides
+ * @security bearerAuth
+ */
 app.post("/cancel-ticket-log", (req, res) => {
+  /* 
+    #swagger.tags = ['Test & Logging']
+    #swagger.summary = 'Mode logging - Annulation sans imprimante'
+    #swagger.description = 'Enregistre le ticket d\'annulation dans un fichier log au lieu de l\'imprimer'
+    #swagger.parameters['body'] = {
+      in: 'body',
+      description: 'Données de la commande annulée',
+      required: true,
+      schema: { $ref: '#/definitions/CommandeAnnulation' }
+    }
+    #swagger.responses[200] = {
+      description: 'Ticket d\'annulation enregistré',
+      schema: { $ref: '#/definitions/LogResponse' }
+    }
+    #swagger.responses[400] = {
+      description: 'Données invalides',
+      schema: { $ref: '#/definitions/ErrorResponse' }
+    }
+  */
   const data = req.body;
 
-  // Validation des données (même que cancel-ticket)
   if (!data.produits || !Array.isArray(data.produits)) {
     return res.status(400).json({ 
       error: "Produits manquants ou invalides", 
@@ -672,13 +829,11 @@ app.post("/cancel-ticket-log", (req, res) => {
   }
 
   try {
-    // Log dans la console
     console.log(`📝 [LOG MODE] Annulation ${data.table || 'EMPORTER'} - ${data.commandeId || 'ID?'} - ${data.produits.length} article(s)`);
     if (data.cancellationReason) {
       console.log(`   [LOG] Raison: ${data.cancellationReason}`);
     }
     
-    // Détection des nouvelles fonctionnalités
     const hasComposedMenus = data.produits.some(item => item.isComposed);
     const hasPortions = data.produits.some(item => item.portionInfo);
     const hasInstructions = data.produits.some(item => item.specialInstructions);
@@ -689,15 +844,12 @@ app.post("/cancel-ticket-log", (req, res) => {
       console.log(`  ✨ [LOG] Nouveau workflow détecté: ${hasComposedMenus ? 'menus composés' : ''} ${hasPortions ? 'portions' : ''}`);
     }
     
-    // Créer le fichier de log d'annulation
     const logInfo = createCancelLogFile(data);
     
     console.log(`✅ [LOG] Ticket d'annulation enregistré dans: ${logInfo.filename} (${logInfo.size} bytes)`);
     
-    // Générer l'aperçu pour la réponse
     const preview = generateCancelTicketPreview(data, true);
     
-    // Réponse similaire à cancel-ticket mais avec infos de logging
     res.json({
       success: true,
       message: "Ticket d'annulation enregistré dans les logs (mode test)",
@@ -732,8 +884,29 @@ app.post("/cancel-ticket-log", (req, res) => {
   }
 });
 
-// ✅ Lister les fichiers de log créés
+/**
+ * GET /logs
+ * @tags Logs
+ * @summary Liste de tous les fichiers de log
+ * @description Récupère la liste de tous les fichiers de log créés
+ * @returns {LogListResponse} 200 - Liste des logs
+ * @returns {ErrorResponse} 500 - Erreur lecture logs
+ * @security bearerAuth
+ */
 app.get("/logs", (req, res) => {
+  /* 
+    #swagger.tags = ['Logs']
+    #swagger.summary = 'Liste de tous les logs'
+    #swagger.description = 'Récupère la liste de tous les fichiers de log créés, triés par date (plus récent en premier)'
+    #swagger.responses[200] = {
+      description: 'Liste des logs récupérée',
+      schema: { $ref: '#/definitions/LogListResponse' }
+    }
+    #swagger.responses[500] = {
+      description: 'Erreur lors de la lecture des logs',
+      schema: { $ref: '#/definitions/ErrorResponse' }
+    }
+  */
   try {
     const logDir = ensureLogDirectory();
     const files = fs.readdirSync(logDir)
@@ -749,7 +922,7 @@ app.get("/logs", (req, res) => {
           type: file.startsWith('CANCEL_') ? 'annulation' : 'normal'
         };
       })
-      .sort((a, b) => b.created - a.created); // Plus récent en premier
+      .sort((a, b) => b.created - a.created);
 
     res.json({
       success: true,
@@ -767,8 +940,44 @@ app.get("/logs", (req, res) => {
   }
 });
 
-// ✅ Lire un fichier de log spécifique
+/**
+ * GET /logs/:filename
+ * @tags Logs
+ * @summary Contenu d'un fichier de log spécifique
+ * @description Récupère le contenu complet d'un fichier de log
+ * @param {string} filename.path.required - Nom du fichier log
+ * @returns {object} 200 - Contenu du log
+ * @returns {ErrorResponse} 404 - Fichier introuvable
+ * @security bearerAuth
+ */
 app.get("/logs/:filename", (req, res) => {
+  /* 
+    #swagger.tags = ['Logs']
+    #swagger.summary = 'Contenu d\'un log spécifique'
+    #swagger.description = 'Récupère le contenu complet d\'un fichier de log par son nom'
+    #swagger.parameters['filename'] = {
+      in: 'path',
+      description: 'Nom du fichier log (ex: 2024-12-07_14-30-00_CMD_001.log)',
+      required: true,
+      type: 'string'
+    }
+    #swagger.responses[200] = {
+      description: 'Contenu du log',
+      schema: {
+        success: true,
+        filename: '2024-12-07_14-30-00_CMD_001.log',
+        size: 2048,
+        created: '2024-12-07T14:30:00Z',
+        modified: '2024-12-07T14:30:00Z',
+        type: 'normal',
+        content: '========================================'
+      }
+    }
+    #swagger.responses[404] = {
+      description: 'Fichier de log introuvable',
+      schema: { $ref: '#/definitions/ErrorResponse' }
+    }
+  */
   try {
     const filename = req.params.filename;
     const logDir = ensureLogDirectory();
@@ -800,8 +1009,34 @@ app.get("/logs/:filename", (req, res) => {
   }
 });
 
-// 🩺 Health check
+/**
+ * GET /health
+ * @tags Santé
+ * @summary Health check du serveur
+ * @description Vérifie que le serveur est opérationnel
+ * @returns {object} 200 - État du serveur
+ */
 app.get("/health", (req, res) => {
+  /* 
+    #swagger.tags = ['Santé']
+    #swagger.summary = 'Health check'
+    #swagger.description = 'Vérifie que le serveur est opérationnel et liste les endpoints disponibles'
+    #swagger.responses[200] = {
+      description: 'Serveur opérationnel',
+      schema: {
+        status: 'ok',
+        time: '2024-12-07T14:30:00Z',
+        modes: {
+          print: '/print-ticket',
+          cancel: '/cancel-ticket',
+          test: '/print-test',
+          preview: '/print-preview',
+          log: '/print-ticket-log',
+          cancelLog: '/cancel-ticket-log'
+        }
+      }
+    }
+  */
   res.json({ 
     status: "ok", 
     time: new Date().toISOString(),
@@ -816,7 +1051,9 @@ app.get("/health", (req, res) => {
   });
 });
 
-// 🚀 Lancement du serveur
+// ============================================
+// DÉMARRAGE DU SERVEUR
+// ============================================
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🖨️ Serveur prêt sur le port ${PORT}`);
   console.log(`✨ Support: ancien workflow + nouveau workflow (menus composés, portions)`);
@@ -828,7 +1065,10 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   POST /print-preview      - Aperçu sans impression`);
   console.log(`   GET  /logs              - Liste des logs`);
   console.log(`   GET  /logs/:filename    - Contenu d'un log`);
+  console.log(`   GET  /health            - Health check`);
+  if (swaggerDocument) {
+    console.log(`   GET  /api-docs          - Documentation Swagger UI`);
+  }
   
-  // Créer le dossier logs au démarrage
   ensureLogDirectory();
 });

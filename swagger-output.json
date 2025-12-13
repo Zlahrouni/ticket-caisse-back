@@ -1,0 +1,1068 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "API d'Impression de Tickets",
+    "description": "\n      API pour l'impression de tickets de commande et d'annulation sur imprimantes thermiques ESC/POS.\n      \n      **Fonctionnalités principales:**\n      - Impression de tickets de commande (sur place et à emporter)\n      - Impression de tickets d'annulation\n      - Support des menus composés avec personnalisations\n      - Gestion des portions (entière, demi, pièce)\n      - Instructions spéciales et notes\n      - Mode logging pour tests sans imprimante\n      - Aperçu des tickets avant impression\n      \n      **Workflow:**\n      1. Utilisez `/print-preview` pour visualiser le ticket\n      2. Utilisez `/print-ticket-log` pour tester sans imprimante\n      3. Utilisez `/print-ticket` pour l'impression réelle\n    ",
+    "version": "2.0.0"
+  },
+  "host": "localhost:3001",
+  "basePath": "/",
+  "tags": [
+    {
+      "name": "Impression",
+      "description": "Endpoints d'impression sur imprimante physique"
+    },
+    {
+      "name": "Test & Logging",
+      "description": "Endpoints de test et logging sans imprimante"
+    },
+    {
+      "name": "Logs",
+      "description": "Consultation des logs d'impression"
+    },
+    {
+      "name": "Santé",
+      "description": "Vérification de l'état du serveur"
+    }
+  ],
+  "schemes": [
+    "http"
+  ],
+  "securityDefinitions": {
+    "bearerAuth": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header",
+      "description": "Bearer token (optionnel si SKIP_AUTH=true)"
+    }
+  },
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/print-test": {
+      "get": {
+        "tags": [
+          "Impression"
+        ],
+        "summary": "Test d\\'impression",
+        "description": "Envoie un ticket de test avec données factices pour vérifier la connexion à l\\'imprimante",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "ip",
+            "in": "query",
+            "description": "Adresse IP de l'imprimante thermique",
+            "required": true,
+            "type": "string",
+            "example": "192.168.1.100"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test d'impression réussi",
+            "schema": {
+              "$ref": "#/definitions/SuccessResponse"
+            }
+          },
+          "400": {
+            "description": "IP manquante",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Erreur lors de l'impression",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/print-preview": {
+      "post": {
+        "tags": [
+          "Test & Logging"
+        ],
+        "summary": "Aperçu du ticket sans impression",
+        "description": "Génère un aperçu textuel du ticket sans l\\'envoyer à l\\'imprimante. Utile pour vérifier le contenu avant impression.",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Données de la commande",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CommandeNormale"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aperçu généré avec succès",
+            "schema": {
+              "$ref": "#/definitions/PreviewResponse"
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/print-ticket": {
+      "post": {
+        "tags": [
+          "Impression"
+        ],
+        "summary": "Imprimer un ticket de commande",
+        "description": "Imprime un ticket de commande sur l\\'imprimante thermique. Utilise l\\'ancien format avec \"items\" au lieu de \"produits\".",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Données de la commande",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/OldWorkflowTicket"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket imprimé avec succès",
+            "schema": {
+              "$ref": "#/definitions/SuccessResponse"
+            }
+          },
+          "400": {
+            "description": "Données invalides ou IP manquante",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Erreur lors de l'impression",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/cancel-ticket": {
+      "post": {
+        "tags": [
+          "Impression"
+        ],
+        "summary": "Imprimer un ticket d\\'annulation",
+        "description": "Imprime un ticket d\\'annulation de commande sur l\\'imprimante thermique",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Données de la commande annulée",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CommandeAnnulation"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket d'annulation imprimé",
+            "schema": {
+              "$ref": "#/definitions/SuccessResponse"
+            }
+          },
+          "400": {
+            "description": "Données invalides ou IP manquante",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Erreur lors de l'impression",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/print-ticket-log": {
+      "post": {
+        "tags": [
+          "Test & Logging"
+        ],
+        "summary": "Mode logging - Test sans imprimante",
+        "description": "Enregistre le ticket dans un fichier log au lieu de l\\'imprimer. Idéal pour tester sans matériel physique.",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Données de la commande",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CommandeNormale"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket enregistré dans les logs",
+            "schema": {
+              "$ref": "#/definitions/LogResponse"
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/cancel-ticket-log": {
+      "post": {
+        "tags": [
+          "Test & Logging"
+        ],
+        "summary": "Mode logging - Annulation sans imprimante",
+        "description": "Enregistre le ticket d\\'annulation dans un fichier log au lieu de l\\'imprimer",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "description": "Données de la commande annulée",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CommandeAnnulation"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket d'annulation enregistré",
+            "schema": {
+              "$ref": "#/definitions/LogResponse"
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/logs": {
+      "get": {
+        "tags": [
+          "Logs"
+        ],
+        "summary": "Liste de tous les logs",
+        "description": "Récupère la liste de tous les fichiers de log créés, triés par date (plus récent en premier)",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste des logs récupérée",
+            "schema": {
+              "$ref": "#/definitions/LogListResponse"
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Erreur lors de la lecture des logs",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "/logs/{filename}": {
+      "get": {
+        "tags": [
+          "Logs"
+        ],
+        "summary": "Contenu d\\'un log spécifique",
+        "description": "Récupère le contenu complet d\\'un fichier de log par son nom",
+        "parameters": [
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "description": "Nom du fichier log (ex: 2024-12-07_14-30-00_CMD_001.log)"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contenu du log",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "filename": {
+                  "type": "string",
+                  "example": "2024-12-07_14-30-00_CMD_001.log"
+                },
+                "size": {
+                  "type": "number",
+                  "example": 2048
+                },
+                "created": {
+                  "type": "string",
+                  "example": "2024-12-07T14:30:00Z"
+                },
+                "modified": {
+                  "type": "string",
+                  "example": "2024-12-07T14:30:00Z"
+                },
+                "type": {
+                  "type": "string",
+                  "example": "normal"
+                },
+                "content": {
+                  "type": "string",
+                  "example": "========================================"
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Fichier de log introuvable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Santé"
+        ],
+        "summary": "Health check",
+        "description": "Vérifie que le serveur est opérationnel et liste les endpoints disponibles",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Serveur opérationnel",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "example": "ok"
+                },
+                "time": {
+                  "type": "string",
+                  "example": "2024-12-07T14:30:00Z"
+                },
+                "modes": {
+                  "type": "object",
+                  "properties": {
+                    "print": {
+                      "type": "string",
+                      "example": "/print-ticket"
+                    },
+                    "cancel": {
+                      "type": "string",
+                      "example": "/cancel-ticket"
+                    },
+                    "test": {
+                      "type": "string",
+                      "example": "/print-test"
+                    },
+                    "preview": {
+                      "type": "string",
+                      "example": "/print-preview"
+                    },
+                    "log": {
+                      "type": "string",
+                      "example": "/print-ticket-log"
+                    },
+                    "cancelLog": {
+                      "type": "string",
+                      "example": "/cancel-ticket-log"
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "CommandeNormale": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "example": "sur_place"
+        },
+        "table": {
+          "type": "string",
+          "example": "12"
+        },
+        "numeroClient": {},
+        "commandeId": {
+          "type": "string",
+          "example": "CMD-12345"
+        },
+        "timestamp": {
+          "type": "string",
+          "example": "2025-12-07T14:30:00Z"
+        },
+        "noteCommande": {
+          "type": "string",
+          "example": "Merci de préparer rapidement"
+        },
+        "produits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "quantite": {
+                "type": "number",
+                "example": 1
+              },
+              "nom": {
+                "type": "string",
+                "example": "Houmous"
+              },
+              "portionInfo": {
+                "type": "string",
+                "example": "demi"
+              }
+            }
+          }
+        }
+      }
+    },
+    "CommandeEmporter": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "example": "emporter"
+        },
+        "table": {},
+        "numeroClient": {
+          "type": "string",
+          "example": "42"
+        },
+        "commandeId": {
+          "type": "string",
+          "example": "CMD-67890"
+        },
+        "timestamp": {
+          "type": "string",
+          "example": "2025-12-07T14:35:00Z"
+        },
+        "noteCommande": {},
+        "produits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "quantite": {
+                "type": "number",
+                "example": 3
+              },
+              "nom": {
+                "type": "string",
+                "example": "Frites"
+              },
+              "specialInstructions": {
+                "type": "string",
+                "example": "Bien croustillantes"
+              }
+            }
+          }
+        }
+      }
+    },
+    "CommandeAnnulation": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "example": "sur_place"
+        },
+        "table": {
+          "type": "string",
+          "example": "12"
+        },
+        "numeroClient": {},
+        "commandeId": {
+          "type": "string",
+          "example": "CMD-12345"
+        },
+        "timestamp": {
+          "type": "string",
+          "example": "2025-12-07T14:30:00Z"
+        },
+        "cancellationReason": {
+          "type": "string",
+          "example": "Client parti sans attendre"
+        },
+        "noteCommande": {
+          "type": "string",
+          "example": "Commande urgente"
+        },
+        "ip": {
+          "type": "string",
+          "example": "192.168.1.100"
+        },
+        "produits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "quantite": {
+                "type": "number",
+                "example": 2
+              },
+              "nom": {
+                "type": "string",
+                "example": "Burger Classique"
+              },
+              "isComposed": {
+                "type": "boolean",
+                "example": true
+              },
+              "composedDetails": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "stepLabel": {
+                      "type": "string",
+                      "example": "Viande"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "nom": {
+                            "type": "string",
+                            "example": "Bœuf"
+                          },
+                          "note": {
+                            "type": "string",
+                            "example": "Saignant"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "CancelTicket": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "example": "sur_place"
+        },
+        "table": {
+          "type": "string",
+          "example": "12"
+        },
+        "numeroClient": {},
+        "commandeId": {
+          "type": "string",
+          "example": "CMD-12345"
+        },
+        "timestamp": {
+          "type": "string",
+          "example": "2025-12-07T14:30:00Z"
+        },
+        "cancellationReason": {
+          "type": "string",
+          "example": "Client parti sans attendre"
+        },
+        "noteCommande": {
+          "type": "string",
+          "example": "Commande urgente"
+        },
+        "ip": {
+          "type": "string",
+          "example": "192.168.1.100"
+        },
+        "produits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "quantite": {
+                "type": "number",
+                "example": 2
+              },
+              "nom": {
+                "type": "string",
+                "example": "Burger Classique"
+              },
+              "isComposed": {
+                "type": "boolean",
+                "example": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "OldWorkflowTicket": {
+      "type": "object",
+      "properties": {
+        "ip": {
+          "type": "string",
+          "example": "192.168.1.102"
+        },
+        "restaurantId": {
+          "type": "string",
+          "example": "talya-bercy"
+        },
+        "serviceType": {
+          "type": "string",
+          "example": "DINING"
+        },
+        "orderNumber": {
+          "type": "string",
+          "example": "CMD_4"
+        },
+        "timestamp": {
+          "type": "number",
+          "example": 1765060580866
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "example": "Menu Talya gourmand"
+              },
+              "quantity": {
+                "type": "number",
+                "example": 1
+              },
+              "price": {
+                "type": "number",
+                "example": 13.5
+              },
+              "menuConfig": {
+                "type": "object",
+                "properties": {
+                  "sandwich-step": {
+                    "type": "array",
+                    "example": [
+                      "Chawarma bœuf"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "beignets-step": {
+                    "type": "array",
+                    "example": [
+                      "Beignet épinard",
+                      "Beignet mixte"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "boisson-step": {
+                    "type": "array",
+                    "example": [
+                      "Fanta (33cl)"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "dessert-step": {
+                    "type": "array",
+                    "example": [
+                      "Baklawa (feuilletés aux fruits secs)"
+                    ],
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tableInfo": {
+          "type": "object",
+          "properties": {
+            "tableId": {
+              "type": "string",
+              "example": "62N41RSuQb7HBPoJx0eI"
+            },
+            "tableNumber": {
+              "type": "string",
+              "example": "RDC 2"
+            },
+            "zoneName": {
+              "type": "string",
+              "example": "RDC"
+            }
+          }
+        }
+      }
+    },
+    "SuccessResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "example": true
+        },
+        "message": {
+          "type": "string",
+          "example": "Ticket imprimé avec succès"
+        }
+      }
+    },
+    "PreviewResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "example": true
+        },
+        "message": {
+          "type": "string",
+          "example": "Aperçu du ticket généré"
+        },
+        "preview": {
+          "type": "string",
+          "example": "================================\n        TABLE (12)        \n================================\n..."
+        },
+        "analysis": {
+          "type": "object",
+          "properties": {
+            "table": {
+              "type": "string",
+              "example": "12"
+            },
+            "commandeId": {
+              "type": "string",
+              "example": "CMD-12345"
+            },
+            "itemCount": {
+              "type": "number",
+              "example": 3
+            },
+            "features": {
+              "type": "object",
+              "properties": {
+                "composedMenus": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "portions": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "specialInstructions": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            },
+            "products": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "index": {
+                    "type": "number",
+                    "example": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "example": "Burger Classique"
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "example": 2
+                  },
+                  "isComposed": {
+                    "type": "boolean",
+                    "example": false
+                  },
+                  "hasPortionInfo": {
+                    "type": "boolean",
+                    "example": false
+                  },
+                  "hasInstructions": {
+                    "type": "boolean",
+                    "example": true
+                  },
+                  "composedSteps": {
+                    "type": "number",
+                    "example": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "LogResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "example": true
+        },
+        "message": {
+          "type": "string",
+          "example": "Ticket enregistré dans les logs (mode test)"
+        },
+        "logFile": {
+          "type": "object",
+          "properties": {
+            "filename": {
+              "type": "string",
+              "example": "2025-12-07_14-30-00_CMD-12345.log"
+            },
+            "path": {
+              "type": "string",
+              "example": "/app/logs/2025-12-07_14-30-00_CMD-12345.log"
+            },
+            "size": {
+              "type": "number",
+              "example": 2048
+            },
+            "created": {
+              "type": "string",
+              "example": "2025-12-07T14:30:00Z"
+            }
+          }
+        },
+        "preview": {
+          "type": "string",
+          "example": "================================\n..."
+        },
+        "analysis": {
+          "type": "object",
+          "properties": {
+            "table": {
+              "type": "string",
+              "example": "12"
+            },
+            "commandeId": {
+              "type": "string",
+              "example": "CMD-12345"
+            },
+            "itemCount": {
+              "type": "number",
+              "example": 3
+            },
+            "features": {
+              "type": "object",
+              "properties": {
+                "composedMenus": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "portions": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "specialInstructions": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "globalNote": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "LogListResponse": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "example": true
+        },
+        "count": {
+          "type": "number",
+          "example": 15
+        },
+        "logDirectory": {
+          "type": "string",
+          "example": "/app/logs"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "filename": {
+                "type": "string",
+                "example": "CANCEL_2025-12-07_14-25-00_CMD-67890.log"
+              },
+              "size": {
+                "type": "number",
+                "example": 1856
+              },
+              "created": {
+                "type": "string",
+                "example": "2025-12-07T14:25:00Z"
+              },
+              "modified": {
+                "type": "string",
+                "example": "2025-12-07T14:25:00Z"
+              },
+              "type": {
+                "type": "string",
+                "example": "annulation"
+              }
+            }
+          }
+        }
+      }
+    },
+    "ErrorResponse": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string",
+          "example": "Description de l'erreur"
+        },
+        "details": {
+          "type": "string",
+          "example": "Détails techniques supplémentaires"
+        }
+      }
+    }
+  }
+}
