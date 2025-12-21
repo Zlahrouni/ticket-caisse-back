@@ -290,7 +290,11 @@ function printTicket(ip, data, callback) {
               const groupItems = item.menuConfig[groupKey];
               if (Array.isArray(groupItems)) {
                 groupItems.forEach((sub) => {
-                  printer.text(`    - ${sanitizeText(sub)}`);
+                  printer
+                    .style("normal")
+                    .size(1, 0)
+                    .text(`    - ${sanitizeText(sub)}`)
+                    .size(1, 1);
                 });
               }
             });
